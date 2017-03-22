@@ -20,6 +20,14 @@ Parameters:
   TestString:
     Type: String
     Default: test9
+  SumoCollectorAccessID:
+    Type: String
+    Default: accessid
+    NoEcho: true
+  SumoCollectorAccessKey:
+    Type: String
+    Default: accesskey
+    NoEcho: true
 Mappings:
   RegionMap:
     us-east-1:
@@ -76,7 +84,7 @@ Resources:
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMALINUX] # Dynamic mapping + Pseudo Parameter
       InstanceType: !FindInMap [InstanceSize, !Ref EnvironmentSize, EC2]
-      KeyName: AdvancedCFN
+      KeyName: key1
       UserData:
         "Fn::Base64":
           !Sub |
@@ -84,6 +92,7 @@ Resources:
             yum update -y aws-cfn-bootstrap # good practice - always do this.
             /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2 --configsets wordpress --region ${AWS::Region}
             yum -y update
+            sudo wget https://collectors.us2.sumologic.com/rest/download/linux/64 -O SumoCollector.sh && sudo chmod +x SumoCollector.sh && sudo ./SumoCollector.sh -q -Vsumo.accessid=${SumoCollectorAccessID} -Vsumo.accesskey=${SumoCollectorAccessKey} -VsyncSources=/opt/SumoSources/sources.json -Vcollector.name=CFN-Collector
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
@@ -91,6 +100,7 @@ Resources:
             - "configure_cfn"
             - "install_wordpress"
             - "config_wordpress"
+            - "config_sumo"
         configure_cfn:
           files:
             /etc/cfn/hooks.d/cfn-auto-reloader.conf:
@@ -158,5 +168,9 @@ Resources:
               cwd: "/var/www/html/wordpress"
               command: !Sub |
                 sed -i 's/password_here/${DatabasePassword}/g' wp-config.php
+        config_sumo:
+          files:
+            /opt/SumoSources/sources.json:
+              source: "https://raw.githubusercontent.com/g-wattz/Sandbox/master/AWS/CloudFormation/SumoSources/Apache_Linux_CFN-Init_Metrics"
   S3:
     Type: "AWS::S3::Bucket"
